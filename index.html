@@ -90,7 +90,10 @@
       backdrop-filter: blur(10px);
       flex: 1;
       max-width: 200px;
+      text-align: center;
     }
+
+    .card-info { margin-bottom: 12px; }
 
     .card.today {
       background: rgba(99,179,237,0.15);
@@ -147,6 +150,59 @@
       padding: 16px 28px;
       font-size: 0.9rem;
       line-height: 1.6;
+    }
+
+    /* 태블릿 이하 */
+    @media (max-width: 600px) {
+      .container { padding: 32px 16px; }
+
+      .search-box input {
+        width: auto;
+        flex: 1;
+        min-width: 0;
+        font-size: 0.95rem;
+      }
+
+      .cards {
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .card {
+        width: 100%;
+        max-width: 320px;
+        padding: 22px 28px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        text-align: left;
+      }
+
+      .card-info { flex: 1; }
+
+      .card-temp {
+        font-size: 2.8rem;
+        text-align: right;
+      }
+
+      .card-date { margin-top: 4px; }
+
+      .diff {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        align-items: center;
+        font-size: 0.88rem;
+        margin-top: 20px;
+      }
+    }
+
+    /* 소형 폰 */
+    @media (max-width: 360px) {
+      .card { padding: 18px 20px; }
+      .card-temp { font-size: 2.4rem; }
+      h1 { font-size: 1rem; }
     }
   </style>
 </head>
@@ -263,28 +319,26 @@
       else if (mDiff < 0)  mDiffHtml = `오늘보다 <span class="down">▼ ${Math.abs(mDiff)}°C</span> 낮을 예정`;
       else                 mDiffHtml = `오늘과 <span class="same">동일한</span> 기온 예상`;
 
+      const cardHtml = (cls, label, avg, idx) => `
+        <div class="card ${cls}">
+          <div class="card-info">
+            <div class="card-label">${label}</div>
+            <div class="card-date">${formatDate(dates[idx])}</div>
+            <div class="card-date">최고 ${maxTemps[idx]}° / 최저 ${minTemps[idx]}°</div>
+          </div>
+          <div class="card-temp">${avg}<span class="unit">°C</span></div>
+        </div>`;
+
       contentEl.innerHTML = `
         <div class="cards">
-          <div class="card">
-            <div class="card-label">어제</div>
-            <div class="card-temp">${yAvg}<span class="unit">°C</span></div>
-            <div class="card-date">${formatDate(dates[0])}</div>
-            <div class="card-date" style="margin-top:4px">최고 ${maxTemps[0]}° / 최저 ${minTemps[0]}°</div>
-          </div>
-          <div class="card today">
-            <div class="card-label">오늘</div>
-            <div class="card-temp">${tAvg}<span class="unit">°C</span></div>
-            <div class="card-date">${formatDate(dates[1])}</div>
-            <div class="card-date" style="margin-top:4px">최고 ${maxTemps[1]}° / 최저 ${minTemps[1]}°</div>
-          </div>
-          <div class="card tomorrow">
-            <div class="card-label">내일 예상</div>
-            <div class="card-temp">${mAvg}<span class="unit">°C</span></div>
-            <div class="card-date">${formatDate(dates[2])}</div>
-            <div class="card-date" style="margin-top:4px">최고 ${maxTemps[2]}° / 최저 ${minTemps[2]}°</div>
-          </div>
+          ${cardHtml('', '어제', yAvg, 0)}
+          ${cardHtml('today', '오늘', tAvg, 1)}
+          ${cardHtml('tomorrow', '내일 예상', mAvg, 2)}
         </div>
-        <div class="diff">${diffHtml} &nbsp;·&nbsp; ${mDiffHtml}</div>
+        <div class="diff">
+          <span>${diffHtml}</span>
+          <span>${mDiffHtml}</span>
+        </div>
       `;
     }
 
