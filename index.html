@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>오늘 & 어제 기온</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      color: white;
+    }
+
+    .container {
+      text-align: center;
+      padding: 40px 20px;
+      width: 100%;
+      max-width: 760px;
+    }
+
+    h1 {
+      font-size: 1.2rem;
+      font-weight: 400;
+      opacity: 0.5;
+      margin-bottom: 28px;
+      letter-spacing: 0.05em;
+    }
+
+    .search-box {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      margin-bottom: 32px;
+    }
+
+    .search-box input {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 12px;
+      padding: 12px 18px;
+      color: white;
+      font-size: 1rem;
+      width: 220px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .search-box input::placeholder { opacity: 0.4; }
+    .search-box input:focus { border-color: rgba(99,179,237,0.6); }
+
+    .search-box button {
+      background: rgba(99,179,237,0.25);
+      border: 1px solid rgba(99,179,237,0.4);
+      border-radius: 12px;
+      padding: 12px 20px;
+      color: white;
+      font-size: 0.95rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .search-box button:hover { background: rgba(99,179,237,0.4); }
+    .search-box button:disabled { opacity: 0.4; cursor: default; }
+
+    .location {
+      font-size: 1rem;
+      opacity: 0.6;
+      margin-bottom: 8px;
+      min-height: 1.4em;
+    }
+
+    .cards {
+      display: flex;
+      gap: 20px;
+      justify-content: center;
+      flex-wrap: nowrap;
+    }
+
+    .card {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 20px;
+      padding: 30px 36px;
+      backdrop-filter: blur(10px);
+      flex: 1;
+      max-width: 200px;
+    }
+
+    .card.today {
+      background: rgba(99,179,237,0.15);
+      border-color: rgba(99,179,237,0.3);
+    }
+
+    .card.tomorrow {
+      background: rgba(154,117,234,0.12);
+      border-color: rgba(154,117,234,0.3);
+    }
+
+    .card-label {
+      font-size: 0.8rem;
+      opacity: 0.5;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      margin-bottom: 12px;
+    }
+
+    .card-temp {
+      font-size: 3.5rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .card-temp .unit {
+      font-size: 1.4rem;
+      font-weight: 400;
+      opacity: 0.6;
+    }
+
+    .card-date {
+      font-size: 0.78rem;
+      opacity: 0.45;
+      margin-top: 8px;
+    }
+
+    .diff {
+      margin-top: 28px;
+      font-size: 0.95rem;
+      opacity: 0.7;
+    }
+
+    .diff .up   { color: #fc8181; }
+    .diff .down { color: #68d391; }
+    .diff .same { color: #cbd5e0; }
+
+    .status { opacity: 0.5; font-size: 0.95rem; }
+
+    .error {
+      background: rgba(252,129,74,0.12);
+      border: 1px solid rgba(252,129,74,0.3);
+      border-radius: 12px;
+      padding: 16px 28px;
+      font-size: 0.9rem;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>오늘 & 어제 기온</h1>
+    <div class="search-box">
+      <input id="cityInput" type="text" placeholder="도시 이름 (예: 서울, Seoul)" />
+      <button id="searchBtn" onclick="searchCity()">조회</button>
+    </div>
+    <div class="location" id="location"></div>
+    <div id="content"></div>
+  </div>
+
+  <script>
+    const locationEl = document.getElementById('location');
+    const contentEl  = document.getElementById('content');
+    const cityInput  = document.getElementById('cityInput');
+    const searchBtn  = document.getElementById('searchBtn');
+
+    cityInput.addEventListener('keydown', e => { if (e.key === 'Enter') searchCity(); });
+
+    function formatDate(dateStr) {
+      const [y, m, d] = dateStr.split('-');
+      return `${y}년 ${parseInt(m)}월 ${parseInt(d)}일`;
+    }
+
+    function showStatus(msg) {
+      contentEl.innerHTML = `<p class="status">${msg}</p>`;
+    }
+
+    function showError(msg) {
+      contentEl.innerHTML = `<div class="error">${msg}</div>`;
+    }
+
+    async function geocodeCity(name) {
+      // Open-Meteo 먼저 시도 (영문에 강함)
+      try {
+        const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=ko`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.results && data.results.length > 0) {
+            const r = data.results[0];
+            return { lat: r.latitude, lon: r.longitude, city: r.name };
+          }
+        }
+      } catch {}
+
+      // 결과 없으면 Nominatim으로 fallback (한글 지원)
+      const url2 = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)}&format=json&limit=1&accept-language=ko`;
+      const res2 = await fetch(url2);
+      if (!res2.ok) throw new Error('지오코딩 API 오류');
+      const data2 = await res2.json();
+      if (!data2.length) throw new Error(`"${name}"을(를) 찾을 수 없습니다`);
+      const r2 = data2[0];
+      const city = r2.display_name.split(',')[0];
+      return { lat: parseFloat(r2.lat), lon: parseFloat(r2.lon), city };
+    }
+
+    async function fetchTemperature(lat, lon) {
+      const url = `https://api.open-meteo.com/v1/forecast` +
+        `?latitude=${lat}&longitude=${lon}` +
+        `&daily=temperature_2m_max,temperature_2m_min` +
+        `&timezone=auto&past_days=1&forecast_days=2`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`날씨 API 오류 (${res.status})`);
+      return res.json();
+    }
+
+    async function reverseGeocode(lat, lon) {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&accept-language=ko`
+        );
+        const d = await res.json();
+        const a = d.address;
+        return a.city || a.town || a.county || a.state || '현재 위치';
+      } catch {
+        return '현재 위치';
+      }
+    }
+
+    async function loadWeather(lat, lon, cityName) {
+      locationEl.textContent = cityName;
+      showStatus('날씨 데이터 불러오는 중...');
+      try {
+        const data = await fetchTemperature(lat, lon);
+        renderCards(data);
+      } catch (e) {
+        showError(`날씨 데이터를 가져오지 못했습니다.<br><small>${e.message}</small>`);
+      }
+    }
+
+    function renderCards(data) {
+      const dates    = data.daily.time;
+      const maxTemps = data.daily.temperature_2m_max;
+      const minTemps = data.daily.temperature_2m_min;
+
+      const avg = (i) => ((maxTemps[i] + minTemps[i]) / 2).toFixed(1);
+      const yAvg = parseFloat(avg(0));
+      const tAvg = parseFloat(avg(1));
+      const diff = (tAvg - yAvg).toFixed(1);
+
+      let diffHtml;
+      if (diff > 0)      diffHtml = `어제보다 <span class="up">▲ ${diff}°C</span> 높아요`;
+      else if (diff < 0) diffHtml = `어제보다 <span class="down">▼ ${Math.abs(diff)}°C</span> 낮아요`;
+      else               diffHtml = `어제와 <span class="same">동일한</span> 기온이에요`;
+
+      const mAvg = parseFloat(avg(2));
+      const mDiff = (mAvg - tAvg).toFixed(1);
+      let mDiffHtml;
+      if (mDiff > 0)       mDiffHtml = `오늘보다 <span class="up">▲ ${mDiff}°C</span> 높을 예정`;
+      else if (mDiff < 0)  mDiffHtml = `오늘보다 <span class="down">▼ ${Math.abs(mDiff)}°C</span> 낮을 예정`;
+      else                 mDiffHtml = `오늘과 <span class="same">동일한</span> 기온 예상`;
+
+      contentEl.innerHTML = `
+        <div class="cards">
+          <div class="card">
+            <div class="card-label">어제</div>
+            <div class="card-temp">${yAvg}<span class="unit">°C</span></div>
+            <div class="card-date">${formatDate(dates[0])}</div>
+            <div class="card-date" style="margin-top:4px">최고 ${maxTemps[0]}° / 최저 ${minTemps[0]}°</div>
+          </div>
+          <div class="card today">
+            <div class="card-label">오늘</div>
+            <div class="card-temp">${tAvg}<span class="unit">°C</span></div>
+            <div class="card-date">${formatDate(dates[1])}</div>
+            <div class="card-date" style="margin-top:4px">최고 ${maxTemps[1]}° / 최저 ${minTemps[1]}°</div>
+          </div>
+          <div class="card tomorrow">
+            <div class="card-label">내일 예상</div>
+            <div class="card-temp">${mAvg}<span class="unit">°C</span></div>
+            <div class="card-date">${formatDate(dates[2])}</div>
+            <div class="card-date" style="margin-top:4px">최고 ${maxTemps[2]}° / 최저 ${minTemps[2]}°</div>
+          </div>
+        </div>
+        <div class="diff">${diffHtml} &nbsp;·&nbsp; ${mDiffHtml}</div>
+      `;
+    }
+
+    async function searchCity() {
+      const name = cityInput.value.trim();
+      if (!name) { cityInput.focus(); return; }
+      searchBtn.disabled = true;
+      showStatus('도시 검색 중...');
+      try {
+        const { lat, lon, city } = await geocodeCity(name);
+        await loadWeather(lat, lon, city);
+      } catch (e) {
+        showError(e.message);
+      } finally {
+        searchBtn.disabled = false;
+      }
+    }
+
+    // GPS 자동 시도 (권한 있으면 자동 로드)
+    if (navigator.geolocation) {
+      showStatus('위치 확인 중... (또는 도시 이름을 직접 입력하세요)');
+      navigator.geolocation.getCurrentPosition(
+        async ({ coords }) => {
+          // 이미 사용자가 검색했으면 무시
+          if (contentEl.querySelector('.cards')) return;
+          const { latitude: lat, longitude: lon } = coords;
+          const city = await reverseGeocode(lat, lon);
+          await loadWeather(lat, lon, city);
+        },
+        () => {
+          // GPS 실패 시 안내만
+          if (!contentEl.querySelector('.cards')) {
+            showStatus('도시 이름을 입력해 주세요');
+          }
+        },
+        { timeout: 6000 }
+      );
+    } else {
+      showStatus('도시 이름을 입력해 주세요');
+    }
+  </script>
+</body>
+</html>
